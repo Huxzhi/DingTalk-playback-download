@@ -4,7 +4,6 @@ import os
 import sys
 import re
 import time
-import uuid
 
 """
 格式：
@@ -29,15 +28,15 @@ find ./ -name '*.mp4' -and ! -name '*264].mp4'  -exec sh -c 'ffmpeg -i "$0" -c:v
 # sz 表示深圳，bj 表示北京，注意修改
 
 host_room = "bj"
-cache_dir = f"dingtalk-cache[{uuid.uuid1()}]"
+cache_dir_base = "[dingtalk-playback]-cache-"
 # base_url = f"https://dtliving-{jifang}.dingtalk.com/live_hp/"
 
 
-def get_list():
+def get_m3u8_list():
     file_list = []
     path = os.listdir('./')
     for i in path:
-        if re.match(r".*\.m3u8$", i):
+        if re.match(r".*\.m3u8$", i) and os.path.isfile(i):
             print(i)
             file_list.append(i)
     return file_list
@@ -54,19 +53,29 @@ def get_url(fileName, host_room="bj"):
     return url_list
 
 
-def download(fileName, host_room):
+def download(fileName, host_room, cache_dir):
     urls = get_url(fileName, host_room)
     sum = len(urls)
     size = 0  # 单位 B
-    scale = 50
+    scale = 50  # 进度条长度
     print(f"一共{sum}个ts文件下载")
     print("执行开始，祈祷不报错".center(scale // 2, "-"))
     start = time.perf_counter()
 
+    finished_i = 0
+    if os.path.exists(cache_dir):
+        print("检测到已下载的文件，继续下载。。。")
+        finished_i = len(os.listdir(cache_dir)) - 1,
+    else:
+        os.mkdir(cache_dir)
+
     for i, url in enumerate(urls):
+
+        if i < finished_i:
+            continue
         # 为了展示进度条
-        a = "*" * int(i / sum * scale)
-        b = "." * int((sum - i)/sum * scale)
+        a = "*" * round(i / sum * scale)
+        b = "." * round((sum - i)/sum * scale)
         c = (i / sum) * 100
         dur = time.perf_counter() - start
         speed = float(size / 1024 / dur)
@@ -90,14 +99,14 @@ def download(fileName, host_room):
             db = "MB/s"
 
         print(
-            "\r[下载进度]{:^3.0f}%[{}->{}] {:.2f}{} {:.2f}s ".format(c, a, b, speed, db, dur), end="")
+            "\r[下载进度] {}/{} {:^3.0f}%[{}->{}] {:.2f}{} {:.2f}s ".format(i, sum, c, a, b, speed, db, dur), end="")
         # print(f"{i}/{sum} 已下载：{round(i/sum*100)}%", "ok")
         # time.sleep(1)
     return len(urls)
 
 
 # 整合文件名, 方便FFmpeg合并
-def parse_filename(len):
+def parse_filename(cache_dir, len):
     base_path = os.getcwd()
     with open(f"{cache_dir}/file.txt", "w+") as f:
         for i in range(1, 1 + len):
@@ -106,6 +115,7 @@ def parse_filename(len):
 
 
 def downloadAndConcat(fileName):
+    cache_dir = cache_dir_base+fileName
 
     name = fileName.split('.', 2)[0]
     host_room = fileName.split('.', 2)[1]
@@ -113,12 +123,18 @@ def downloadAndConcat(fileName):
     for i in range(3):
         print("倒计时：", 3-i, "s")
         time.sleep(1)
-    parse_filename(download(fileName, host_room))
-    print("download finished,准备合并视频...")
+    parse_filename(cache_dir, download(fileName, host_room, cache_dir))
+    print("\ndownload finished,准备合并视频...")
     time.sleep(3)  # 等待喵
     os.system(
         f'ffmpeg -hide_banner -f concat -safe 0 -i {cache_dir}/file.txt -c copy {name}.mp4')
     os.rename(fileName, fileName+'.ok')
+
+    # 中途出错，保留上一次的下载记录
+    if os.path.exists(cache_dir):
+        shutil.rmtree(cache_dir)
+    print(f"{fileName} finished")
+
     return fileName
 
 
@@ -135,19 +151,18 @@ def extraFFmpeg(fileNames, argv):
                 f"ffmpeg -hide_banner  -y -i {name}.mp4 -vn -c:a copy '{name}.aac'")
 
 
+def resume(fileName):
+    return fileName
+
+
 if __name__ == "__main__":
-    list = get_list()
+    list = get_m3u8_list()
     finished = []
+
     print("检测到可下载文件： ", list)
-    if not os.path.exists(cache_dir):
-        os.mkdir(cache_dir)
+
     for fileName in list:
         finished.append(downloadAndConcat(fileName))
 
-    # 中途出错，保留上一次的下载记录
-    if os.path.exists(cache_dir):
-        shutil.rmtree(cache_dir)
-    print("list finished")
-
-    # 对下载完成的视频进行额外操作
+    # 对已下载完成的视频进行额外操作
     extraFFmpeg(finished, sys.argv)
