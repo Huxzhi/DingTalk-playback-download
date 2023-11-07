@@ -6,28 +6,26 @@ import re
 import time
 
 """
-格式：
+## 使用说明：
 
-保存文件名为 "名称.机房.m3u8" , 可以保存多个文件，脚本会批量处理 。sz 表示深圳，bj 表示北京，注意修改
+1. 保存文件名为 "名称.机房.m3u8" , 可以保存多个文件，脚本会批量处理 。sz 表示深圳，bj 表示北京，注意修改
+2. 执行脚本 "python3 a.py"
 
-执行脚本 "python3 a.py"
+格式: "python3 a.py [-mac-crf] [-nv]" 在 mac 下 ，可以增加参数执行命令 -crf 压缩成 720p分辨率 ，-nv 提取音频
 
-在 mac 下 ，可以增加参数执行命令 -crf 压缩成 720p分辨率 ，-nv 提取音频
-
-例: "python3 a.py -crf -nv"
-
-# 常用脚本
+## 常用脚本
 
 合并视频 Terminal 执行，已经包含在自动化脚本里面
 ffmpeg -f concat -safe 0 -i file.txt -c copy a.mp4
 
 压缩当前文件下的所有视频的
 find ./ -name '*.mp4' -and ! -name '*264].mp4'  -exec sh -c 'ffmpeg -i "$0" -c:v libx264 -crf 30 -c:a aac "${0%%.mp4}[x264].mp4"' {} \;
+
 """
 
 # sz 表示深圳，bj 表示北京，注意修改
 
-host_room = "bj"
+host_room = "bj"  # 会重新赋值
 cache_dir_base = "[dingtalk-playback]-cache-"
 # base_url = f"https://dtliving-{jifang}.dingtalk.com/live_hp/"
 
@@ -65,13 +63,14 @@ def download(fileName, host_room, cache_dir):
     finished_i = 0
     if os.path.exists(cache_dir):
         print("检测到已下载的文件，继续下载。。。")
-        finished_i = len(os.listdir(cache_dir)) - 1,
+        finished_i = max(len(os.listdir(cache_dir)) - 1, 0)
     else:
         os.mkdir(cache_dir)
 
     for i, url in enumerate(urls):
 
         if i < finished_i:
+            # 已下载
             continue
         # 为了展示进度条
         a = "*" * round(i / sum * scale)
@@ -88,7 +87,6 @@ def download(fileName, host_room, cache_dir):
                 size += int(response.headers["Content-Length"])
                 f.write(response.content)
             else:
-                # todo 增加继续下载功能
                 print(f"执行到 {i} 发生错误")
                 print(
                     f"\n\nerror: response.Content-Type not 'video/MP2T' \nMaybe {fileName}'s roomID 'bj' or 'sz' miss")
@@ -99,7 +97,7 @@ def download(fileName, host_room, cache_dir):
             db = "MB/s"
 
         print(
-            "\r[下载进度] {}/{} {:^3.0f}%[{}->{}] {:.2f}{} {:.2f}s ".format(i, sum, c, a, b, speed, db, dur), end="")
+            "\r[下载进度] {}/{} {:^3.0f}% [{}->{}] {:.2f}{} {:.2f}s ".format(i+1, sum, c, a, b, speed, db, dur), end="")
         # print(f"{i}/{sum} 已下载：{round(i/sum*100)}%", "ok")
         # time.sleep(1)
     return len(urls)
@@ -130,7 +128,7 @@ def downloadAndConcat(fileName):
         f'ffmpeg -hide_banner -f concat -safe 0 -i {cache_dir}/file.txt -c copy {name}.mp4')
     os.rename(fileName, fileName+'.ok')
 
-    # 中途出错，保留上一次的下载记录
+    # 清除缓存
     if os.path.exists(cache_dir):
         shutil.rmtree(cache_dir)
     print(f"{fileName} finished")
@@ -142,17 +140,13 @@ def extraFFmpeg(fileNames, argv):
     for fileName in fileNames:
         name = fileName.split('.', 2)[0]
         # 压缩视频
-        if "-crf" in argv:
+        if "-mac-crf" in argv:
             os.system(
                 f"ffmpeg -hide_banner  -y -i {name}.mp4 -vf scale=-1:720  -c:v libx264 -crf 30 -c:a aac '{name}[x264].mp4'")
         # 提取音频
         if "-vn" in argv:
             os.system(
                 f"ffmpeg -hide_banner  -y -i {name}.mp4 -vn -c:a copy '{name}.aac'")
-
-
-def resume(fileName):
-    return fileName
 
 
 if __name__ == "__main__":

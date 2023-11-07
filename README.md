@@ -48,7 +48,7 @@ xxx/1.ts?auth_key=xxx
 
 ### 如果是 windows
 
-不能使用参数 `-crf` ，压缩视频，需要更换编码器指令
+不能使用参数 `-mac-crf` ，压缩视频，需要更换编码器指令
 
 ### python 脚本 [^1]
 
@@ -57,10 +57,6 @@ xxx/1.ts?auth_key=xxx
 ```python
 import requests, os, re, time
 
-
-def crawl(url):
-    r = requests.get(url).content
-    return r
 
 # sz 表示深圳，bj 表示北京，
 base_url = "https://dtliving-sz.dingtalk.com/live_hp/"
@@ -80,7 +76,7 @@ def download():
     urls = get_url()
     for i, url in enumerate(urls):
         with open(f"{i + 1}.ts", "wb") as f:
-            f.write(crawl(url[:-1]))  # 去掉换行符
+            response = requests.get(url[:-1])  # 去掉换行符
         print(i, "ok")
         # time.sleep(1)
 
