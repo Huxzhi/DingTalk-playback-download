@@ -117,6 +117,9 @@ def downloadAndConcat(fileName):
 
     name = fileName.split('.', 2)[0]
     host_room = fileName.split('.', 2)[1]
+    if get_url(fileName, host_room) == 0:
+        print("文件内容为空!!")
+        return
     print(f"\n\n{fileName},准备下载...")
     for i in range(3):
         print("倒计时：", 3-i, "s")
